@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
+    alias(libs.plugins.room)
 }
 
 android {
@@ -22,8 +23,17 @@ android {
     }
 }
 
+room {
+    // Exported schemas are checked in so Phase 2+ migrations can be written and tested.
+    schemaDirectory("$projectDir/schemas")
+}
+
 dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
+    implementation(libs.androidx.room.runtime)
+    ksp(libs.androidx.room.compiler)
     testImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.espresso.core) // brings androidx.test:runner
 }
