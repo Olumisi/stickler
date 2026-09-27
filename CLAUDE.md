@@ -16,10 +16,13 @@ Android app (phone + Wear OS) that keeps a planned task in front of the user fro
 
 ## SDK levels
 - minSdk 31 (Android 12), targetSdk/compileSdk 37 (Android 17)
+- `:wear` minSdk 33 (Wear OS 4); it can't go below `:core`'s 31, and no Wear OS release uses API 31/32
+- SDK levels live in `gradle/libs.versions.toml` (`compileSdk`, `targetSdk`, `minSdk`, `wearMinSdk`)
 - Before Phase 1, check Android 17 behavior changes that affect notifications, alarms and foreground services
 - Always branch on `Build.VERSION.SDK_INT` for version-specific behaviour (see spec: "Behaviour by Android version")
 
 ## Commands
+CLI builds need a JDK: if `JAVA_HOME` isn't set, use Android Studio's bundled one (`export JAVA_HOME="/c/Program Files/Android/Android Studio/jbr"`).
 - Build: `./gradlew assembleDebug`
 - Unit tests: `./gradlew test`
 - Instrumented tests: `./gradlew connectedAndroidTest`

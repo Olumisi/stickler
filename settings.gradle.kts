@@ -23,4 +23,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "Stickler"
-include(":app")
+include(":app", ":core", ":wear")
