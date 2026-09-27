@@ -123,7 +123,7 @@ Four tables cover v1: the plan, its tasks, an event log that drives escalation a
 | Entity | Key fields | Notes |
 | --- | --- | --- |
 | `Plan` | id, title, startDate, endDate, createdAt | A time window, usually one day |
-| `Task` | id, planId, title, note, scheduledAt, durationMin?, status, snoozeCount, missedReason?, completedAt? | status: Scheduled, Due, Snoozed, Done, Missed; missedReason: UserMarked, NextTaskDue, PlanEnded |
+| `Task` | id, planId, title, note, scheduledAt, durationMin?, status, snoozeCount, missedReason?, completedAt?, remindAt? | status: Scheduled, Due, Snoozed, Done, Missed; missedReason: UserMarked, NextTaskDue, PlanEnded; remindAt: when the next alarm fires (task time or snooze end), used to restore alarms after a reboot |
 | `ReminderEvent` | id, taskId, type, at, device | type: Fired, Realerted, Escalated, Snoozed, Dismissed, Reposted, Done, MarkedMissed, AutoMissed, Undone, DoneLate; device: Phone or Watch |
 | `Settings` | realertIntervalMin, escalateAfter, snoozeMin, maxSnoozes, fullScreenEnabled | Single row; defaults 5, 3, 10, 2, off |
 
@@ -175,6 +175,7 @@ Test on your own phone from Phase 1. Some manufacturers (notably Samsung and Xia
 | 2026-09-26 | Users can mark a task Missed; an unresolved task is marked Missed automatically when the next task becomes due (replaces "never auto-clears") |
 | 2026-09-26 | A missed task can be changed to Done until the end of that day (local midnight); it is recorded as done late |
 | 2026-09-27 | Phase 0 complete. Watch app minimum is Wear OS 4 (API 33) and shares the phone app's application ID |
+| 2026-09-27 | Phase 1: `Task.remindAt` added for snooze and boot rescheduling; `Task.planId` nullable until `Plan` lands in Phase 2; snooze limit uses a default of 2 until the Settings table exists; reminder logic in `:core`, Android receivers and notifications in `:app` (keeps them out of the watch app) |
 
 **Open questions**
 
