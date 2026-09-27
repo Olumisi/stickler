@@ -59,7 +59,7 @@ A due task stays present on every surface, and a swipe-away comes back, until Do
 
 1. At the task time: notification plus one watch vibration.
 2. Every 5 minutes while unresolved: re-alert on phone and watch.
-3. After 3 ignored re-alerts: stronger pattern (sound plus long vibration).
+3. After 3 ignored re-alerts: stronger pattern (sound plus long vibration; sound via the notification channel or alarm-stream audio, per the Android 17 notes).
 4. The task stays active until Done or Missed, or until the next task becomes due; then it is marked Missed automatically and the next task's reminder takes over. The plan's last task stays active until the plan window ends, then is marked Missed.
 
 **Snooze rules:** 10 minutes per snooze; one app-wide setting sets how many snoozes each task gets (default 2, user-adjustable in Settings); no daily cap. Every snooze is logged and shown in the review. If the next task becomes due while this one is snoozed, the handover rule applies and it is marked Missed.
@@ -88,6 +88,15 @@ Other permissions: `POST_NOTIFICATIONS` (Android 13+ runtime prompt) and `RECEIV
 | 14–15 (API 34–35) | Ongoing notifications swipeable when unlocked, so re-post on dismissal; full-screen alerts need user grant | `canUseFullScreenIntent()` check, full-screen settings link |
 | 16+ (API 36) | As 14, plus promoted ongoing notification request | Live Update status bar chip |
 
+**Android 17 (API 37) notes**, from the Phase 0 review of Google's behavior-change pages:
+
+- **Background audio:** audio started from the background fails silently. Escalation sound must come from the notification channel, or from alarm-stream audio only when `canScheduleExactAlarms()` is true. Test channel sounds on a real device in Phase 3.
+- **Background activity launches:** the Now screen and full-screen takeover open only from a notification tap or a full-screen intent, never directly from an alarm.
+- **Notification images:** use standard notification templates only; oversized custom images can crash the app.
+- **Memory limits:** alarm receivers stay lightweight; the scheduled alarm plus the database are the source of truth.
+- **Large screens:** no locked orientation or size; the Now screen must work on tablets and foldables.
+- **Unverified:** one third-party report says some foreground-service types may need a user consent dialog. Stickler doesn't use a foreground service for reminders; re-check before Phases 3–4.
+
 ## Architecture and tech stack
 
 Native Kotlin in one Android Studio project with three modules; no backend in v1. The phone is the source of truth and the watch mirrors it.
@@ -103,7 +112,7 @@ Native Kotlin in one Android Studio project with three modules; no backend in v1
 | Architecture pattern | MVVM + repository, Hilt for dependency injection | Testable, conventional |
 | Tests | JUnit, Compose UI tests, Robolectric for alarm logic | Reminder timing must be test-covered |
 
-**Modules:** `:core` (task model, Room, reminder engine), `:app` (phone UI), `:wear` (watch UI, tile, complication).
+**Modules:** `:core` (task model, Room, reminder engine), `:app` (phone UI), `:wear` (watch UI, tile, complication; minimum Wear OS 4 / API 33; same application ID as the phone app, required for Data Layer sync).
 
 **Later (v2) on Azure:** sign-in with Microsoft Entra External ID, an API on Azure Functions or App Service, Azure SQL or Cosmos DB for sync across devices, and Azure Notification Hubs if server-driven reminders are needed.
 
@@ -165,6 +174,7 @@ Test on your own phone from Phase 1. Some manufacturers (notably Samsung and Xia
 | 2026-09-25 | Publish from a personal Play developer account (no registered company yet); requires the 12-tester, 14-day closed test |
 | 2026-09-26 | Users can mark a task Missed; an unresolved task is marked Missed automatically when the next task becomes due (replaces "never auto-clears") |
 | 2026-09-26 | A missed task can be changed to Done until the end of that day (local midnight); it is recorded as done late |
+| 2026-09-27 | Phase 0 complete. Watch app minimum is Wear OS 4 (API 33) and shares the phone app's application ID |
 
 **Open questions**
 
