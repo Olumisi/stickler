@@ -1,20 +1,14 @@
 package com.isedalabs.stickler.debug
 
-import android.Manifest
-import android.content.Context
-import android.content.pm.PackageManager
-import android.os.Build
-import androidx.core.app.NotificationManagerCompat
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.isedalabs.stickler.core.data.Task
 import com.isedalabs.stickler.core.data.TaskRepository
 import com.isedalabs.stickler.core.reminder.ReminderEngine
 import com.isedalabs.stickler.core.reminder.TestTaskScheduled
-import com.isedalabs.stickler.reminder.AndroidAlarmScheduler
+import com.isedalabs.stickler.reminder.PermissionChecker
+import com.isedalabs.stickler.reminder.ReminderPermissions
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -27,16 +21,13 @@ import javax.inject.Inject
 /** Phase 1 debug screen: permission status, "schedule a test task", and the stored tasks. */
 @HiltViewModel
 class DebugViewModel @Inject constructor(
-    @param:ApplicationContext private val context: Context,
     private val engine: ReminderEngine,
-    private val scheduler: AndroidAlarmScheduler,
+    private val permissionChecker: PermissionChecker,
     tasks: TaskRepository,
 ) : ViewModel() {
 
-    data class Permissions(val notifications: Boolean, val exactAlarms: Boolean)
-
-    private val _permissions = MutableStateFlow(readPermissions())
-    val permissions: StateFlow<Permissions> = _permissions.asStateFlow()
+    private val _permissions = MutableStateFlow(permissionChecker.read())
+    val permissions: StateFlow<ReminderPermissions> = _permissions.asStateFlow()
 
     val tasks: StateFlow<List<Task>> = tasks.observeAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -51,27 +42,12 @@ class DebugViewModel @Inject constructor(
 
     /** Called on resume: the user may have changed a permission in system settings. */
     fun refreshPermissions() {
-        _permissions.value = readPermissions()
+        _permissions.value = permissionChecker.read()
     }
 
     fun scheduleTestTask(delay: Duration) {
         viewModelScope.launch {
             _lastScheduled.value = engine.createTestTask(delay)
         }
-    }
-
-    private fun readPermissions() = Permissions(
-        notifications = notificationsAllowed(),
-        exactAlarms = scheduler.canScheduleExact(),
-    )
-
-    private fun notificationsAllowed(): Boolean {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
-            PackageManager.PERMISSION_GRANTED
-        ) {
-            return false
-        }
-        return NotificationManagerCompat.from(context).areNotificationsEnabled()
     }
 }

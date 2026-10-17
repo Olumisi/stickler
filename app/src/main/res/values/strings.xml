@@ -9,16 +9,43 @@
     <string name="reminder_action_missed">Missed</string>
     <string name="reminder_action_snooze">Snooze 10 min</string>
 
-    <!-- Phase 1 debug screen -->
+    <!-- Today screen -->
+    <string name="today_title">Today</string>
+    <string name="today_debug">Debug</string>
+    <string name="today_add_task">Add task</string>
+    <string name="today_empty">No tasks today. Tap Add task to plan one.</string>
+    <string name="today_scheduled_inexact">Saved, but exact alarms are off: the reminder may be late</string>
+    <string name="today_time_in_past">Pick a time later than now</string>
+    <string name="today_time_locked">This task is already due, so only its title can change</string>
+    <string name="today_task_gone">That task no longer exists</string>
+    <string name="status_scheduled">Scheduled</string>
+    <string name="status_due">Due now</string>
+    <string name="status_snoozed">Snoozed</string>
+    <string name="status_done">Done</string>
+    <string name="status_missed">Missed</string>
+
+    <!-- Task editor -->
+    <string name="editor_new_title">New task</string>
+    <string name="editor_edit_title">Edit task</string>
+    <string name="editor_title_label">Title</string>
+    <string name="editor_time_button">Time: %1$s</string>
+    <string name="editor_time_locked">This task is due, so its time is locked.</string>
+    <string name="editor_save">Save</string>
+    <string name="editor_cancel">Cancel</string>
+    <string name="editor_ok">OK</string>
+    <string name="editor_delete">Delete</string>
+    <string name="editor_delete_confirm_title">Delete this task?</string>
+
+    <!-- Permissions (Today and debug screens) and Phase 1 debug screen -->
     <string name="debug_title">Reminder spike</string>
-    <string name="debug_perm_notifications">Notifications</string>
-    <string name="debug_perm_exact_alarms">Exact alarms</string>
-    <string name="debug_granted">allowed</string>
-    <string name="debug_denied">denied</string>
-    <string name="debug_grant">Grant</string>
-    <string name="debug_allow">Allow</string>
-    <string name="debug_exact_denied_warning">Exact alarms are off, so reminders may arrive late. Tap Allow to turn them on.</string>
-    <string name="debug_notifications_denied_warning">Notifications are off, so due tasks can\'t be shown.</string>
+    <string name="perm_notifications">Notifications</string>
+    <string name="perm_exact_alarms">Exact alarms</string>
+    <string name="perm_granted">allowed</string>
+    <string name="perm_denied">denied</string>
+    <string name="perm_grant">Grant</string>
+    <string name="perm_allow">Allow</string>
+    <string name="perm_exact_denied_warning">Exact alarms are off, so reminders may arrive late. Tap Allow to turn them on.</string>
+    <string name="perm_notifications_denied_warning">Notifications are off, so due tasks can\'t be shown.</string>
     <string name="debug_schedule_header">Schedule test task in:</string>
     <string name="debug_preset_minutes">%1$d min</string>
     <string name="debug_scheduled_at">Test task #%1$d fires at %2$s</string>
