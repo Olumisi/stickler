@@ -9,9 +9,7 @@ import com.isedalabs.stickler.core.data.canDelete
 import com.isedalabs.stickler.core.data.canEditTime
 import com.isedalabs.stickler.core.data.canEditTitle
 import com.isedalabs.stickler.core.data.dayWindow
-import com.isedalabs.stickler.core.reminder.EditResult
 import com.isedalabs.stickler.core.reminder.ReminderEngine
-import com.isedalabs.stickler.core.reminder.ScheduleResult
 import com.isedalabs.stickler.reminder.PermissionChecker
 import com.isedalabs.stickler.reminder.ReminderPermissions
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -66,8 +64,6 @@ class TodayViewModel @Inject constructor(
     tasks: TaskRepository,
 ) : ViewModel() {
 
-    enum class Message { ScheduledInexact, TimeInPast, TimeLocked, NotFound }
-
     private val _day = MutableStateFlow(currentDay())
     val day: StateFlow<Day> = _day.asStateFlow()
 
@@ -81,13 +77,21 @@ class TodayViewModel @Inject constructor(
     private val _editor = MutableStateFlow<TaskEditor?>(null)
     val editor: StateFlow<TaskEditor?> = _editor.asStateFlow()
 
-    private val _messages = Channel<Message>(Channel.BUFFERED)
-    val messages: Flow<Message> = _messages.receiveAsFlow()
+    private val _messages = Channel<EditorMessage>(Channel.BUFFERED)
+    val messages: Flow<EditorMessage> = _messages.receiveAsFlow()
 
     /** Called on resume: the date, time zone or permissions may have changed while away. */
     fun refresh() {
-        _day.value = currentDay()
+        refreshDay()
         refreshPermissions()
+    }
+
+    /**
+     * Recomputes the local day. Called every minute while Today is on screen and on time or
+     * time-zone changes; an unchanged day is ignored by the StateFlow, so nothing re-queries.
+     */
+    fun refreshDay() {
+        _day.value = currentDay()
     }
 
     fun refreshPermissions() {
@@ -100,7 +104,7 @@ class TodayViewModel @Inject constructor(
             taskId = null,
             date = day.date,
             title = "",
-            time = nextQuarterHour(day.zone),
+            time = defaultNewTaskTime(ZonedDateTime.ofInstant(clock.instant(), day.zone)),
             canEditTime = true,
             canDelete = false,
         )
@@ -143,46 +147,27 @@ class TodayViewModel @Inject constructor(
                 val at = editor.originalAt?.takeIf { editor.time == editor.originalTime } ?: editor.instant(zone)
                 engine.editTask(editor.taskId, editor.title, at)
             }
-            when (result) {
-                is EditResult.Saved -> {
-                    _editor.value = null
-                    if (result.schedule == ScheduleResult.Inexact) _messages.send(Message.ScheduledInexact)
-                }
-                EditResult.TimeInPast -> _messages.send(Message.TimeInPast)
-                EditResult.NotAllowed -> {
-                    // The task came due while the sheet was open: lock the time, keep the typed title.
-                    _editor.update { it?.copy(canEditTime = false, canDelete = false) }
-                    _messages.send(Message.TimeLocked)
-                }
-                EditResult.NotFound -> {
-                    _editor.value = null
-                    _messages.send(Message.NotFound)
-                }
-            }
+            // Apply to the current state so anything typed while saving is kept.
+            apply((_editor.value ?: editor).after(result))
         }
     }
 
     fun delete() {
-        val taskId = _editor.value?.taskId ?: return
+        val editor = _editor.value ?: return
+        val taskId = editor.taskId ?: return
         viewModelScope.launch {
-            if (engine.deleteTask(taskId)) {
-                _editor.value = null
-            } else {
-                _editor.update { it?.copy(canEditTime = false, canDelete = false) }
-                _messages.send(Message.TimeLocked)
-            }
+            apply((_editor.value ?: editor).afterDelete(engine.deleteTask(taskId)))
         }
+    }
+
+    private suspend fun apply(outcome: EditorOutcome) {
+        _editor.value = outcome.editor
+        outcome.message?.let { _messages.send(it) }
     }
 
     private fun currentDay(): Day {
         val zone = ZoneId.systemDefault()
         return Day(clock.instant().atZone(zone).toLocalDate(), zone)
-    }
-
-    /** New tasks default to the next whole quarter hour. */
-    private fun nextQuarterHour(zone: ZoneId): LocalTime {
-        val now = ZonedDateTime.ofInstant(clock.instant(), zone).truncatedTo(ChronoUnit.MINUTES)
-        return now.plusMinutes(15L - now.minute % 15).toLocalTime()
     }
 
     private fun TaskEditor.instant(zone: ZoneId): Instant = date.atTime(time).atZone(zone).toInstant()

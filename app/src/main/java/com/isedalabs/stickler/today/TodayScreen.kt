@@ -1,5 +1,9 @@
 package com.isedalabs.stickler.today
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -21,13 +25,16 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import com.isedalabs.stickler.R
 import com.isedalabs.stickler.core.data.Task
 import com.isedalabs.stickler.core.data.TaskStatus
@@ -50,13 +57,29 @@ fun TodayScreen(viewModel: TodayViewModel, onOpenDebug: () -> Unit, modifier: Mo
     val snackbar = remember { SnackbarHostState() }
 
     val messageText = mapOf(
-        TodayViewModel.Message.ScheduledInexact to stringResource(R.string.today_scheduled_inexact),
-        TodayViewModel.Message.TimeInPast to stringResource(R.string.today_time_in_past),
-        TodayViewModel.Message.TimeLocked to stringResource(R.string.today_time_locked),
-        TodayViewModel.Message.NotFound to stringResource(R.string.today_task_gone),
+        EditorMessage.ScheduledInexact to stringResource(R.string.today_scheduled_inexact),
+        EditorMessage.TimeInPast to stringResource(R.string.today_time_in_past),
+        EditorMessage.TimeLocked to stringResource(R.string.today_time_locked),
+        EditorMessage.NotFound to stringResource(R.string.today_task_gone),
     )
     LaunchedEffect(viewModel) {
         viewModel.messages.collect { snackbar.showSnackbar(messageText.getValue(it)) }
+    }
+
+    // Follow midnight, clock changes and time-zone changes while the screen is showing.
+    val context = LocalContext.current
+    DisposableEffect(context, viewModel) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) = viewModel.refreshDay()
+        }
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_TIME_TICK)
+            addAction(Intent.ACTION_TIME_CHANGED)
+            addAction(Intent.ACTION_TIMEZONE_CHANGED)
+        }
+        // System broadcasts are still delivered to a non-exported receiver.
+        ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+        onDispose { context.unregisterReceiver(receiver) }
     }
 
     Scaffold(
