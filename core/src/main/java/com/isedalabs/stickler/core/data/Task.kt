@@ -37,11 +37,14 @@ data class Task(
 /** The title can be fixed while the task is still active, even once it's due. */
 val Task.canEditTitle: Boolean get() = status.isActive
 
-/** The time is locked once the task is due, so editing can't bypass the snooze limit. */
-val Task.canEditTime: Boolean get() = status == TaskStatus.Scheduled
+/**
+ * The time is locked once the task's time has come, even if a late (inexact) alarm hasn't marked
+ * it Due yet, so editing can't bypass the snooze limit.
+ */
+fun Task.canEditTime(now: Instant): Boolean = status == TaskStatus.Scheduled && scheduledAt.isAfter(now)
 
-/** Only a task that hasn't come due yet can be deleted; a due task is resolved with Done or Missed. */
-val Task.canDelete: Boolean get() = status == TaskStatus.Scheduled
+/** Only a task whose time hasn't come can be deleted; a due task is resolved with Done or Missed. */
+fun Task.canDelete(now: Instant): Boolean = canEditTime(now)
 
 enum class TaskStatus {
     Scheduled, Due, Snoozed, Done, Missed;

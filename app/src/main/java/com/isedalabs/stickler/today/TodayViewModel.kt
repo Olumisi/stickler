@@ -110,13 +110,14 @@ class TodayViewModel @Inject constructor(
         if (!task.canEditTitle) return
         val local = task.scheduledAt.atZone(_day.value.zone)
         val time = local.toLocalTime().truncatedTo(ChronoUnit.MINUTES)
+        val now = clock.instant()
         _editor.value = TaskEditor(
             taskId = task.id,
             date = local.toLocalDate(),
             title = task.title,
             time = time,
-            canEditTime = task.canEditTime,
-            canDelete = task.canDelete,
+            canEditTime = task.canEditTime(now),
+            canDelete = task.canDelete(now),
             originalAt = task.scheduledAt,
             originalTime = time,
         )

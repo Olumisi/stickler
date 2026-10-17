@@ -5,6 +5,7 @@ import com.isedalabs.stickler.core.data.SettingsRepository
 import com.isedalabs.stickler.core.data.Task
 import com.isedalabs.stickler.core.data.TaskRepository
 import com.isedalabs.stickler.core.data.TimeWindow
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import java.time.Clock
 import java.time.Duration
@@ -22,15 +23,29 @@ class FakeTaskRepository : TaskRepository {
         return id
     }
 
+    /** Like Room's @Update: a no-op if the row was deleted. */
     override suspend fun update(task: Task) {
-        tasks[task.id] = task
+        if (task.id in tasks) tasks[task.id] = task
     }
 
     override suspend fun delete(task: Task) {
         tasks.remove(task.id)
     }
 
-    override suspend fun get(id: Long): Task? = tasks[id]
+    /**
+     * When set, the next [get] reads the row and then suspends until this completes before
+     * returning it, so a test can run another call in between (the stale-read race).
+     */
+    var holdAfterGet: CompletableDeferred<Unit>? = null
+
+    override suspend fun get(id: Long): Task? {
+        val task = tasks[id]
+        holdAfterGet?.let {
+            holdAfterGet = null
+            it.await()
+        }
+        return task
+    }
 
     override suspend fun getActive(): List<Task> = tasks.values.filter { it.status.isActive }
 
@@ -68,9 +83,13 @@ class FakeNotifier : ReminderNotifier {
     val showing = mutableMapOf<Long, Boolean>()
     var showCount = 0
 
-    override fun show(task: Task, canSnooze: Boolean) {
+    /** Whether the most recent [show] was silent. */
+    var lastSilent: Boolean? = null
+
+    override fun show(task: Task, canSnooze: Boolean, silent: Boolean) {
         showing[task.id] = canSnooze
         showCount++
+        lastSilent = silent
     }
 
     override fun cancel(taskId: Long) {

@@ -4,7 +4,12 @@ import com.isedalabs.stickler.core.data.MissedReason
 import com.isedalabs.stickler.core.data.Settings
 import com.isedalabs.stickler.core.data.Task
 import com.isedalabs.stickler.core.data.TaskStatus
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.yield
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -309,7 +314,102 @@ class ReminderEngineTest {
         assertEquals("Renamed", repo.require(id).title)
         assertEquals(TaskStatus.Due, repo.require(id).status)
         assertEquals(shown + 1, notifier.showCount)
+        assertEquals(true, notifier.lastSilent) // a title fix doesn't alert again
         assertEquals(alarms, scheduler.pending)
+    }
+
+    @Test
+    fun alerts_areNotSilent() = test {
+        val id = dueTask()
+        assertEquals(false, notifier.lastSilent)
+
+        notifier.swipe(id)
+        engine.onDismissed(id)
+        engine.onRepost(id)
+
+        assertEquals(false, notifier.lastSilent)
+    }
+
+    @Test
+    fun lateInexactAlarm_locksTimeAndDeleteOnceTimeHasPassed() = test {
+        val at = inTenMinutes
+        val id = addTask(at)
+        clock.advance(Duration.ofMinutes(11)) // the alarm is late, so the task is still Scheduled
+
+        assertEquals(TaskStatus.Scheduled, repo.require(id).status)
+        assertEquals(EditResult.NotAllowed, engine.editTask(id, "Write report", clock.now.plus(Duration.ofHours(1))))
+        assertFalse(engine.deleteTask(id))
+        assertEquals(EditResult.Saved(id, null), engine.editTask(id, "Renamed", at))
+        assertEquals(at, scheduler.pending[id to AlarmKind.TaskDue])
+    }
+
+    @Test
+    fun rescheduleAll_afterEdit_usesEditedTime() = test {
+        val id = addTask()
+        val newTime = clock.now.plus(Duration.ofMinutes(25))
+        engine.editTask(id, "Write report", newTime)
+        scheduler.pending.clear() // a reboot drops all alarms
+
+        engine.rescheduleAll()
+
+        assertEquals(mapOf((id to AlarmKind.TaskDue) to newTime), scheduler.pending)
+    }
+
+    @Test
+    fun done_forDeletedTask_stillClearsNotification() = test {
+        val id = addTask()
+        notifier.show(repo.require(id), canSnooze = true) // a leftover notification
+        repo.delete(repo.require(id))
+
+        engine.onDone(id)
+
+        assertTrue(notifier.showing.isEmpty())
+        assertTrue(scheduler.pending.isEmpty())
+    }
+
+    // --- Concurrent calls (alarm receiver vs UI) ---
+
+    /** Runs [first] until it has read the task, then starts [second], then lets [first] finish. */
+    private suspend fun <T> race(first: suspend () -> Unit, second: suspend () -> T): T = coroutineScope {
+        val hold = CompletableDeferred<Unit>()
+        repo.holdAfterGet = hold
+        launch { first() }
+        yield() // first() now holds a stale copy of the task
+        val result = async { second() }
+        yield()
+        hold.complete(Unit)
+        result.await()
+    }
+
+    @Test
+    fun alarmFiringDuringDelete_neverLeavesNotificationForMissingTask() = test {
+        val id = addTask()
+        // The user acts a second before the task time, just as the alarm fires (e.g. a slightly early alarm).
+        clock.advance(Duration.ofMinutes(10).minusSeconds(1))
+
+        val deleted = race(first = { engine.onTaskDue(id) }, second = { engine.deleteTask(id) })
+
+        // The alarm won: the task is Due and shown, and delete was refused.
+        assertFalse(deleted)
+        assertEquals(TaskStatus.Due, repo.require(id).status)
+        assertTrue(id in notifier.showing)
+    }
+
+    @Test
+    fun alarmFiringDuringTimeEdit_neverLosesTheEditSilently() = test {
+        val at = inTenMinutes
+        val id = addTask(at)
+        // The user acts a second before the task time, just as the alarm fires (e.g. a slightly early alarm).
+        clock.advance(Duration.ofMinutes(10).minusSeconds(1))
+        val later = clock.now.plus(Duration.ofMinutes(20))
+
+        val result = race(first = { engine.onTaskDue(id) }, second = { engine.editTask(id, "Write report", later) })
+
+        // The alarm won, so the edit is reported as refused and no alarm is left at the new time.
+        assertEquals(EditResult.NotAllowed, result)
+        assertEquals(TaskStatus.Due, repo.require(id).status)
+        assertEquals(at, repo.require(id).scheduledAt)
+        assertTrue(scheduler.pending.values.none { it == later })
     }
 
     @Test

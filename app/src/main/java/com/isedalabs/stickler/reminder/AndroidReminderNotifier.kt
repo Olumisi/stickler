@@ -35,7 +35,7 @@ class AndroidReminderNotifier @Inject constructor(
 
     private val manager = NotificationManagerCompat.from(context)
 
-    override fun show(task: Task, canSnooze: Boolean) {
+    override fun show(task: Task, canSnooze: Boolean, silent: Boolean) {
         if (!canPost()) {
             Log.w(TAG, "Notifications not allowed; task ${task.id} is due but can't be shown")
             return
@@ -52,6 +52,7 @@ class AndroidReminderNotifier @Inject constructor(
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setSilent(silent)
             .setContentIntent(openAppIntent())
             .setDeleteIntent(action(ReminderIntents.ACTION_DISMISSED, task.id))
             .addAction(0, context.getString(R.string.reminder_action_done), action(ReminderIntents.ACTION_DONE, task.id))

@@ -179,6 +179,7 @@ Test on your own phone from Phase 1. Some manufacturers (notably Samsung and Xia
 | 2026-10-16 | Phase 2: a plan is one local day, stored as a UTC window and created when the first task for that day is added; `Task.planId` stays nullable only for debug test tasks. Database v1→v2 has a real migration, covered by a MigrationTestHelper test |
 | 2026-10-16 | Editing rules: before its time, a task's title and time can be edited and the task can be deleted. Once due or snoozed, only the title can change; the time is locked so editing can't bypass the snooze limit, and the task can't be deleted. Done and Missed tasks are read-only. New tasks and new times must be in the future |
 | 2026-10-16 | Phase 2: quick add is for today only. The snooze limit is now read from the Settings table (default 2); the other settings take effect in Phase 3, and `ReminderEvent` rows start being written in Phase 3 |
+| 2026-10-16 | Phase 2 review fixes: the reminder engine serialises every state change (alarms, notification actions and the UI can arrive at once). "Before its time" means Scheduled *and* the task time hasn't passed, so a late inexact alarm doesn't keep the time editable. A title-only edit of a due task updates its notification silently. Done/Missed on a task that no longer exists still clears its notification |
 
 **Open questions**
 
