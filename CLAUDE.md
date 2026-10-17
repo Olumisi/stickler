@@ -33,6 +33,8 @@ CLI builds need a JDK: if `JAVA_HOME` isn't set, use Android Studio's bundled on
 - Never remove or bypass a permission check (`canScheduleExactAlarms()`, `canUseFullScreenIntent()`, `Settings.canDrawOverlays()`, `POST_NOTIFICATIONS`). Degrade gracefully when a permission is missing.
 - Don't add `USE_EXACT_ALARM` to the manifest (Play policy decision in spec).
 - `SYSTEM_ALERT_WINDOW` is allowed only for the Stickler pane (spec decision 2026-10-16). Check `Settings.canDrawOverlays()` before showing it, and fall back to the reminder notification when it's denied.
+- The pane's two config flags, `allowShrinkToBubble` and `requireOverlayPermission` (spec: "Stickler pane rules"), live in `:core`. Changing either is a one-line change plus tests.
+- The notification fallback must always keep working: the reminder notification is posted whether or not the pane is shown, and it is the only surface when the overlay permission is missing or the phone is locked.
 - Store times in UTC; convert to local time only for display.
 - Snoozes per task come from the single app-wide setting (default 2). No daily cap.
 - Work in small slices: one feature, tests passing, then commit with a clear message.
