@@ -176,6 +176,9 @@ Test on your own phone from Phase 1. Some manufacturers (notably Samsung and Xia
 | 2026-09-26 | A missed task can be changed to Done until the end of that day (local midnight); it is recorded as done late |
 | 2026-09-27 | Phase 0 complete. Watch app minimum is Wear OS 4 (API 33) and shares the phone app's application ID |
 | 2026-09-27 | Phase 1: `Task.remindAt` added for snooze and boot rescheduling; `Task.planId` nullable until `Plan` lands in Phase 2; snooze limit uses a default of 2 until the Settings table exists; reminder logic in `:core`, Android receivers and notifications in `:app` (keeps them out of the watch app) |
+| 2026-10-16 | Phase 2: a plan is one local day, stored as a UTC window and created when the first task for that day is added; `Task.planId` stays nullable only for debug test tasks. Database v1→v2 has a real migration, covered by a MigrationTestHelper test |
+| 2026-10-16 | Editing rules: before its time, a task's title and time can be edited and the task can be deleted. Once due or snoozed, only the title can change; the time is locked so editing can't bypass the snooze limit, and the task can't be deleted. Done and Missed tasks are read-only. New tasks and new times must be in the future |
+| 2026-10-16 | Phase 2: quick add is for today only. The snooze limit is now read from the Settings table (default 2); the other settings take effect in Phase 3, and `ReminderEvent` rows start being written in Phase 3 |
 
 **Open questions**
 

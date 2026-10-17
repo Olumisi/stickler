@@ -1,6 +1,7 @@
 package com.isedalabs.stickler.core.reminder
 
 import com.isedalabs.stickler.core.data.MissedReason
+import com.isedalabs.stickler.core.data.Settings
 import com.isedalabs.stickler.core.data.Task
 import com.isedalabs.stickler.core.data.TaskStatus
 import kotlinx.coroutines.runBlocking
@@ -19,7 +20,8 @@ class ReminderEngineTest {
     private val repo = FakeTaskRepository()
     private val scheduler = FakeAlarmScheduler()
     private val notifier = FakeNotifier()
-    private val engine = ReminderEngine(repo, scheduler, notifier, clock)
+    private val settings = FakeSettingsRepository()
+    private val engine = ReminderEngine(repo, scheduler, notifier, settings, clock)
 
     private fun test(block: suspend () -> Unit) = runBlocking { block() }
 
@@ -197,7 +199,7 @@ class ReminderEngineTest {
     @Test
     fun snooze_isLimitedToMaxSnoozes() = test {
         val id = dueTask()
-        repeat(ReminderPolicy.DEFAULT_MAX_SNOOZES) {
+        repeat(Settings().maxSnoozes) {
             assertEquals(true, notifier.showing[id]) // Snooze action offered
             assertTrue(engine.onSnooze(id))
             clock.advance(ReminderPolicy.SNOOZE)
@@ -207,7 +209,20 @@ class ReminderEngineTest {
         assertEquals(false, notifier.showing[id]) // Snooze action no longer offered
         assertFalse(engine.onSnooze(id))
         assertEquals(TaskStatus.Due, repo.require(id).status)
-        assertEquals(ReminderPolicy.DEFAULT_MAX_SNOOZES, repo.require(id).snoozeCount)
+        assertEquals(Settings().maxSnoozes, repo.require(id).snoozeCount)
+    }
+
+    @Test
+    fun snoozeLimit_comesFromSettings() = test {
+        settings.settings = Settings(maxSnoozes = 1)
+        val id = dueTask()
+
+        assertTrue(engine.onSnooze(id))
+        clock.advance(ReminderPolicy.SNOOZE)
+        engine.onTaskDue(id)
+
+        assertEquals(false, notifier.showing[id])
+        assertFalse(engine.onSnooze(id))
     }
 
     @Test
@@ -216,6 +231,143 @@ class ReminderEngineTest {
 
         assertFalse(engine.onSnooze(1))
         assertEquals(TaskStatus.Scheduled, repo.require(1).status)
+    }
+
+    // --- Add, edit, delete ---
+
+    private val inTenMinutes get() = clock.now.plus(Duration.ofMinutes(10))
+
+    private suspend fun addTask(at: Instant = inTenMinutes): Long {
+        val result = engine.addTask(Task(planId = 1, title = "Write report", scheduledAt = at))
+        return (result as EditResult.Saved).taskId
+    }
+
+    @Test
+    fun addTask_storesScheduledTaskAndSchedulesAlarm() = test {
+        val at = inTenMinutes
+
+        val result = engine.addTask(Task(planId = 1, title = "  Write report ", scheduledAt = at))
+
+        assertEquals(EditResult.Saved(1, ScheduleResult.Exact), result)
+        val task = repo.require(1)
+        assertEquals("Write report", task.title)
+        assertEquals(TaskStatus.Scheduled, task.status)
+        assertEquals(at, task.remindAt)
+        assertEquals(at, scheduler.pending[1L to AlarmKind.TaskDue])
+    }
+
+    @Test
+    fun addTask_inThePast_isRejected() = test {
+        assertEquals(EditResult.TimeInPast, engine.addTask(Task(title = "t", scheduledAt = clock.now)))
+        assertTrue(repo.getActive().isEmpty())
+        assertTrue(scheduler.pending.isEmpty())
+    }
+
+    @Test
+    fun editTime_ofScheduledTask_movesAlarm() = test {
+        val id = addTask()
+        val newTime = clock.now.plus(Duration.ofMinutes(3))
+
+        val result = engine.editTask(id, "Write report", newTime)
+
+        assertEquals(EditResult.Saved(id, ScheduleResult.Exact), result)
+        assertEquals(newTime, repo.require(id).scheduledAt)
+        assertEquals(newTime, repo.require(id).remindAt)
+        assertEquals(mapOf((id to AlarmKind.TaskDue) to newTime), scheduler.pending)
+    }
+
+    @Test
+    fun editTime_toThePast_isRejected() = test {
+        val at = inTenMinutes
+        val id = addTask(at)
+
+        assertEquals(EditResult.TimeInPast, engine.editTask(id, "Write report", clock.now.minusSeconds(1)))
+        assertEquals(at, repo.require(id).scheduledAt)
+        assertEquals(at, scheduler.pending[id to AlarmKind.TaskDue])
+    }
+
+    @Test
+    fun editTitle_ofScheduledTask_keepsAlarm() = test {
+        val at = inTenMinutes
+        val id = addTask(at)
+
+        assertEquals(EditResult.Saved(id, null), engine.editTask(id, "Send report", at))
+        assertEquals("Send report", repo.require(id).title)
+        assertEquals(at, scheduler.pending[id to AlarmKind.TaskDue])
+        assertTrue(notifier.showing.isEmpty())
+    }
+
+    @Test
+    fun editTitle_ofDueTask_updatesNotification() = test {
+        val id = dueTask()
+        val shown = notifier.showCount
+        val alarms = scheduler.pending.toMap()
+
+        val result = engine.editTask(id, "Renamed", repo.require(id).scheduledAt)
+
+        assertEquals(EditResult.Saved(id, null), result)
+        assertEquals("Renamed", repo.require(id).title)
+        assertEquals(TaskStatus.Due, repo.require(id).status)
+        assertEquals(shown + 1, notifier.showCount)
+        assertEquals(alarms, scheduler.pending)
+    }
+
+    @Test
+    fun editTime_ofDueTask_isNotAllowed() = test {
+        val id = dueTask()
+        val alarms = scheduler.pending.toMap()
+
+        assertEquals(EditResult.NotAllowed, engine.editTask(id, "Test task", inTenMinutes))
+        assertEquals(TaskStatus.Due, repo.require(id).status)
+        assertEquals(alarms, scheduler.pending)
+        assertTrue(id in notifier.showing)
+    }
+
+    @Test
+    fun editTime_ofSnoozedTask_isNotAllowed() = test {
+        val id = dueTask()
+        engine.onSnooze(id)
+        val snoozeEnd = repo.require(id).remindAt
+
+        assertEquals(EditResult.NotAllowed, engine.editTask(id, "Test task", clock.now.plus(Duration.ofHours(1))))
+        assertEquals(snoozeEnd, scheduler.pending[id to AlarmKind.TaskDue])
+    }
+
+    @Test
+    fun edit_ofResolvedTask_isNotAllowed() = test {
+        val id = dueTask()
+        engine.onDone(id)
+
+        assertEquals(EditResult.NotAllowed, engine.editTask(id, "Renamed", repo.require(id).scheduledAt))
+        assertEquals("Test task", repo.require(id).title)
+    }
+
+    @Test
+    fun edit_ofUnknownTask_isNotFound() = test {
+        assertEquals(EditResult.NotFound, engine.editTask(42, "t", inTenMinutes))
+    }
+
+    @Test
+    fun delete_ofScheduledTask_removesTaskAndAlarms() = test {
+        val id = addTask()
+
+        assertTrue(engine.deleteTask(id))
+        assertFalse(repo.contains(id))
+        assertTrue(scheduler.pending.isEmpty())
+    }
+
+    @Test
+    fun delete_ofDueTask_isNotAllowed() = test {
+        val id = dueTask()
+
+        assertFalse(engine.deleteTask(id))
+        assertTrue(repo.contains(id))
+        assertTrue(id in notifier.showing)
+    }
+
+    @Test
+    fun delete_ofUnknownTask_returnsFalse() = test {
+        assertFalse(engine.deleteTask(42))
     }
 
     // --- Re-post on dismiss ---
