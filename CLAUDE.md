@@ -30,8 +30,9 @@ CLI builds need a JDK: if `JAVA_HOME` isn't set, use Android Studio's bundled on
 
 ## Rules
 - Reminder behaviour (escalation ladder, snooze limits, re-post on dismiss, Missed and the automatic handover to the next task) lives in `:core` and must have unit tests. Don't change it without updating tests and the spec.
-- Never remove or bypass a permission check (`canScheduleExactAlarms()`, `canUseFullScreenIntent()`, `POST_NOTIFICATIONS`). Degrade gracefully when a permission is missing.
-- Don't add `USE_EXACT_ALARM` or `SYSTEM_ALERT_WINDOW` to the manifest (Play policy decision in spec).
+- Never remove or bypass a permission check (`canScheduleExactAlarms()`, `canUseFullScreenIntent()`, `Settings.canDrawOverlays()`, `POST_NOTIFICATIONS`). Degrade gracefully when a permission is missing.
+- Don't add `USE_EXACT_ALARM` to the manifest (Play policy decision in spec).
+- `SYSTEM_ALERT_WINDOW` is allowed only for the Stickler pane (spec decision 2026-10-16). Check `Settings.canDrawOverlays()` before showing it, and fall back to the reminder notification when it's denied.
 - Store times in UTC; convert to local time only for display.
 - Snoozes per task come from the single app-wide setting (default 2). No daily cap.
 - Work in small slices: one feature, tests passing, then commit with a clear message.

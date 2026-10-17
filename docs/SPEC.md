@@ -20,10 +20,11 @@ Version 1 is a single-user, offline app: plan a day, get persistent reminders, m
 | Create a task list for a time window (e.g. today) | Recurring tasks and templates |
 | Set a time (and optional duration) per task | Accounts, login, cloud sync |
 | Persistent reminder at each task's time | iPhone and Apple Watch |
-| Escalating nudges until Done or Missed | Sharing tasks with family |
-| Limited, visible snooze | Streaks, analytics, AI suggestions |
-| Wear OS: see current task, tap Done or Missed | Calendar import |
-| End-of-day review: done vs missed, with snooze counts | Location-based reminders |
+| Floating Stickler pane over other apps, shrinkable to a bubble | Sharing tasks with family |
+| Escalating nudges until Done or Missed | Streaks, analytics, AI suggestions |
+| Limited, visible snooze | Calendar import |
+| Wear OS: see current task, tap Done or Missed | Location-based reminders |
+| End-of-day review: done vs missed, with snooze counts | |
 
 ## User stories and core flows
 
@@ -32,7 +33,7 @@ Six flows cover v1: plan, fire, escalate, resolve, hand over, review.
 1. **Plan the day.** As a user, I add tasks with a title and time for a period (default: today), so my intentions are captured ahead.
    - Quick add: title + time picker; optional note and duration.
    - Reorder or edit any task before its time.
-2. **Reminder fires.** At the task's time, the phone shows a persistent reminder and the watch vibrates.
+2. **Reminder fires.** At the task's time, a floating Stickler pane appears over whatever I'm using (or a persistent notification if the pane isn't allowed), and the watch vibrates.
    - The reminder cannot be swiped away; only Done, Missed or Snooze clears it.
 3. **Escalation.** If I don't act, nudges repeat and get stronger.
    - Repeat interval and max intensity are user settings.
@@ -44,10 +45,11 @@ Six flows cover v1: plan, fire, escalate, resolve, hand over, review.
 
 ## Reminder behaviour design
 
-A due task stays present on every surface, and a swipe-away comes back, until Done. Android no longer lets apps make a notification truly unswipeable, so persistence is built from re-posting and escalation rather than a lock.
+A due task stays present on every surface, and a swipe-away comes back, until Done. Android no longer lets apps make a notification truly unswipeable, so persistence is built from the Stickler pane, re-posting and escalation rather than a lock.
 
 | Surface | What the user sees | How it persists |
 | --- | --- | --- |
+| Stickler pane (primary) | Floating card over any app: task title, time since due, Done, Missed and Snooze; draggable; can shrink to a small bubble at the screen edge (tap to expand) | Stays until the task is resolved; cannot be closed, only shrunk. Needs "Display over other apps"; hosted by a foreground service. Not shown on the lock screen |
 | Phone notification | Task title, time since due, Done, Missed and Snooze buttons | Ongoing notification; if swiped away, it is re-posted after 60 s |
 | Lock screen | Same notification, top of list | Ongoing notifications cannot be swiped while the phone is locked |
 | Status bar chip (Android 16+) | Short task label | Requested as a Live Update; the system may decline (see constraints) |
@@ -66,6 +68,13 @@ A due task stays present on every surface, and a swipe-away comes back, until Do
 
 **Missed rules:** Tapping Missed clears the reminder everywhere, shows a 10-second Undo, and records the reason: marked by the user, handed over when the next task became due, or plan window ended. Tasks due at the same time don't hand over to each other; only a later task triggers the handover. If you finish a missed task afterwards, you can change it to Done from the Today list until the end of that day (local midnight); the review shows it as done late.
 
+**Stickler pane rules:** The pane is the main reminder surface when the user has allowed "Display over other apps"; the notification is always posted too and is the only surface when the permission is missing or the phone is locked. Two behaviours are switchable config flags in `:core`, so either decision can be reversed with a one-line change plus tests:
+
+| Flag | v1 value | Alternative |
+| --- | --- | --- |
+| `allowShrinkToBubble` | `true`: the user can shrink the pane to a bubble | `false`: the pane stays full size until resolved |
+| `requireOverlayPermission` | `false`: onboarding strongly encourages the permission; without it, Stickler falls back to notifications | `true`: the app can't be used until the permission is granted |
+
 ## Android platform constraints and permissions
 
 Four Android rules shape the design; the app supports Android 12+ (minSdk 31), targets the latest SDK, and uses newer features where the device has them.
@@ -75,9 +84,10 @@ Four Android rules shape the design; the app supports Android 12+ (minSdk 31), t
 | Exact alarms | `SCHEDULE_EXACT_ALARM` is denied by default on fresh installs from Android 14; the user must grant it. `USE_EXACT_ALARM` is auto-granted but Play allows it only for alarm-clock and calendar-type apps. ([Android docs](https://developer.android.com/about/versions/14/changes/schedule-exact-alarms)) | Request `SCHEDULE_EXACT_ALARM` in onboarding; check `canScheduleExactAlarms()`; fall back to inexact alarms with a warning banner. |
 | Swipeable notifications | From Android 14, users can dismiss notifications marked ongoing, except on the lock screen; call and media notifications are exempt. ([Android docs](https://developer.android.com/about/versions/14/behavior-changes-all)) | Re-post on dismissal (delete intent) until Done. |
 | Full-screen alerts | `USE_FULL_SCREEN_INTENT` is granted by default only to calling and alarm apps; Play requires a declaration. ([Android docs](https://developer.android.com/about/versions/14/behavior-changes-14), [Play policy](https://support.google.com/googleplay/android-developer/answer/13392821)) | Takeover is opt-in: check `canUseFullScreenIntent()` and send the user to the settings screen to allow it. |
+| Drawing over other apps | `SYSTEM_ALERT_WINDOW` ("Display over other apps") is a special permission granted only in system settings; Play policy says to direct users there ([Play policy](https://support.google.com/googleplay/android-developer/answer/16909972)). Keeping the pane up while the app is in the background needs a foreground service; starting one from the background is allowed when an exact alarm fires, and on Android 15+ the overlay exemption also requires a visible overlay window ([Android docs](https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start)). | Onboarding explains the pane and opens the settings screen. The pane is hosted by a `specialUse` foreground service, whose use case Google reviews at submission ([service types](https://developer.android.com/develop/background-work/services/fgs/service-types)). The reminder notification doubles as the service notification. |
 | Live Updates (Android 16+) | Promoted ongoing notifications need `POST_PROMOTED_NOTIFICATIONS` and a standard or progress-style template; they target ongoing activities, not simple reminders. ([Android Police](https://www.androidpolice.com/android-16-qpr-1-full-live-updates-support/)) | Request promotion for an active task; treat it as a bonus, never the only surface. |
 
-Other permissions: `POST_NOTIFICATIONS` (Android 13+ runtime prompt) and `RECEIVE_BOOT_COMPLETED` (re-schedule alarms after restart). Avoid "display over other apps" (`SYSTEM_ALERT_WINDOW`) in v1: it adds Play review risk and user friction.
+Other permissions: `POST_NOTIFICATIONS` (Android 13+ runtime prompt) and `RECEIVE_BOOT_COMPLETED` (re-schedule alarms after restart). "Display over other apps" (`SYSTEM_ALERT_WINDOW`) is used for the Stickler pane (decided 2026-10-16; see the drawing-over-apps row above).
 
 **Behaviour by Android version:** the code branches on `Build.VERSION.SDK_INT`, so older phones get the strongest persistence they allow and newer phones get the newer surfaces.
 
@@ -108,6 +118,7 @@ Native Kotlin in one Android Studio project with three modules; no backend in v1
 | Local storage | Room (SQLite) | Structured tasks and event history, offline |
 | Scheduling | `AlarmManager` exact alarms + boot receiver | Fires on time even when the app is closed |
 | Reminders | `NotificationCompat` with Done/Missed/Snooze actions | One reminder engine for phone and watch |
+| Stickler pane | Overlay window (`TYPE_APPLICATION_OVERLAY`) in Compose, hosted by a `specialUse` foreground service | Floats over other apps; survives while the app is closed |
 | Phone-to-watch sync | Wearable Data Layer API | Built-in, no server needed |
 | Architecture pattern | MVVM + repository, Hilt for dependency injection | Testable, conventional |
 | Tests | JUnit, Compose UI tests, Robolectric for alarm logic | Reminder timing must be test-covered |
@@ -125,7 +136,7 @@ Four tables cover v1: the plan, its tasks, an event log that drives escalation a
 | `Plan` | id, title, startDate, endDate, createdAt | A time window, usually one day |
 | `Task` | id, planId, title, note, scheduledAt, durationMin?, status, snoozeCount, missedReason?, completedAt?, remindAt? | status: Scheduled, Due, Snoozed, Done, Missed; missedReason: UserMarked, NextTaskDue, PlanEnded; remindAt: when the next alarm fires (task time or snooze end), used to restore alarms after a reboot |
 | `ReminderEvent` | id, taskId, type, at, device | type: Fired, Realerted, Escalated, Snoozed, Dismissed, Reposted, Done, MarkedMissed, AutoMissed, Undone, DoneLate; device: Phone or Watch |
-| `Settings` | realertIntervalMin, escalateAfter, snoozeMin, maxSnoozes, fullScreenEnabled | Single row; defaults 5, 3, 10, 2, off |
+| `Settings` | realertIntervalMin, escalateAfter, snoozeMin, maxSnoozes, fullScreenEnabled | Single row; defaults 5, 3, 10, 2, off. The pane flags (`allowShrinkToBubble`, `requireOverlayPermission`) are app config, not user settings |
 
 Store times in UTC with the device time zone applied at display, so travel and daylight-saving changes don't shift reminders.
 
@@ -138,9 +149,10 @@ Build the riskiest part first: prove the reminder engine works on a real phone b
 | 0. Setup | Android Studio, Claude Code, GitHub repo, 3-module project, CLAUDE.md | Empty app runs on phone and watch emulator |
 | 1. Reminder spike | Exact alarm fires a notification with Done; re-post on swipe | Works with the app closed and after a reboot |
 | 2. Planning | Room database, add/edit tasks, today list | Tasks survive restart; alarms reschedule on edit |
+| 2b. Stickler pane | Overlay pane with Done/Missed/Snooze, shrink to bubble, foreground service, notification fallback, the two config flags | Pane appears with the app closed and after a restart, on Android 12 and 17; shrinking works; with the permission off, the notification fallback works |
 | 3. Escalation | Re-alerts, snooze limits, Missed (manual and automatic handover), event log, end-of-day review | Unit tests cover the full escalation ladder and the handover rule |
 | 4. Watch | Data Layer sync, Done on watch, ongoing activity, tile | Done on watch clears the phone within seconds |
-| 5. Onboarding | Permission flow, settings, optional full-screen mode | New install reaches a working reminder in under 2 minutes |
+| 5. Onboarding | Permission flow (including "Display over other apps"), settings, optional full-screen mode | New install reaches a working reminder in under 2 minutes |
 | 6. Release | Closed testing track, store listing, privacy policy, Data safety form, content rating, full-screen permission declaration | 12+ testers opted in and active for 14 continuous days; production access approved |
 
 **How to work with Claude at each step:**
@@ -180,7 +192,11 @@ Test on your own phone from Phase 1. Some manufacturers (notably Samsung and Xia
 | 2026-10-16 | Editing rules: before its time, a task's title and time can be edited and the task can be deleted. Once due or snoozed, only the title can change; the time is locked so editing can't bypass the snooze limit, and the task can't be deleted. Done and Missed tasks are read-only. New tasks and new times must be in the future |
 | 2026-10-16 | Phase 2: quick add is for today only. The snooze limit is now read from the Settings table (default 2); the other settings take effect in Phase 3, and `ReminderEvent` rows start being written in Phase 3 |
 | 2026-10-16 | Phase 2 review fixes: the reminder engine serialises every state change (alarms, notification actions and the UI can arrive at once). "Before its time" means Scheduled *and* the task time hasn't passed, so a late inexact alarm doesn't keep the time editable. A title-only edit of a due task updates its notification silently. Done/Missed on a task that no longer exists still clears its notification |
+| 2026-10-16 | Add the floating Stickler pane over other apps as the main reminder surface (reverses "avoid display over other apps in v1"); build it as Phase 2b, after Phase 2 |
+| 2026-10-16 | The pane can shrink to a bubble (config flag `allowShrinkToBubble`, switchable) |
+| 2026-10-16 | Overlay permission is encouraged, not required; notifications are the fallback (config flag `requireOverlayPermission`, switchable) |
 
 **Open questions**
 
 - [ ] Which watch to test on (deferred; no watch yet). Leading option: a Samsung Galaxy Watch, as the most common and most customized Wear OS watch. Use the Wear OS emulator until then.
+- [ ] Wording of the `specialUse` foreground-service justification for the Play submission.
