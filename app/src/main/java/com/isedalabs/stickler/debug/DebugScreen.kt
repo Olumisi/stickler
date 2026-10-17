@@ -20,15 +20,12 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -37,6 +34,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.isedalabs.stickler.R
 import com.isedalabs.stickler.core.data.Task
+import com.isedalabs.stickler.core.reminder.ScheduleResult
+import com.isedalabs.stickler.core.reminder.TestTaskScheduled
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -48,7 +47,7 @@ fun DebugScreen(viewModel: DebugViewModel, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val permissions by viewModel.permissions.collectAsState()
     val tasks by viewModel.tasks.collectAsState()
-    val snackbar = remember { SnackbarHostState() }
+    val lastScheduled by viewModel.lastScheduled.collectAsState()
 
     val notificationLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -61,20 +60,7 @@ fun DebugScreen(viewModel: DebugViewModel, modifier: Modifier = Modifier) {
         }
     }
 
-    val exactMessage = stringResource(R.string.debug_scheduled_exact)
-    val inexactMessage = stringResource(R.string.debug_scheduled_inexact)
-    LaunchedEffect(viewModel) {
-        viewModel.messages.collect { message ->
-            snackbar.showSnackbar(
-                when (message) {
-                    DebugViewModel.Message.ScheduledExact -> exactMessage
-                    DebugViewModel.Message.ScheduledInexact -> inexactMessage
-                },
-            )
-        }
-    }
-
-    Scaffold(modifier = modifier.fillMaxSize(), snackbarHost = { SnackbarHost(snackbar) }) { padding ->
+    Scaffold(modifier = modifier.fillMaxSize()) { padding ->
         Column(
             modifier = Modifier.padding(padding).padding(16.dp).fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -113,9 +99,15 @@ fun DebugScreen(viewModel: DebugViewModel, modifier: Modifier = Modifier) {
                 WarningBanner(stringResource(R.string.debug_notifications_denied_warning))
             }
 
-            Button(onClick = viewModel::scheduleTestTask, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.debug_schedule_test_task))
+            Text(stringResource(R.string.debug_schedule_header), style = MaterialTheme.typography.titleMedium)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                viewModel.presets.forEach { delay ->
+                    Button(onClick = { viewModel.scheduleTestTask(delay) }, modifier = Modifier.weight(1f)) {
+                        Text(stringResource(R.string.debug_preset_minutes, delay.toMinutes()))
+                    }
+                }
             }
+            lastScheduled?.let { LastScheduled(it) }
 
             HorizontalDivider()
             Text(stringResource(R.string.debug_tasks_header), style = MaterialTheme.typography.titleMedium)
@@ -147,6 +139,27 @@ private fun WarningBanner(text: String) {
         modifier = Modifier.fillMaxWidth(),
     ) {
         Text(text, modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+@Composable
+private fun LastScheduled(scheduled: TestTaskScheduled) {
+    Column {
+        Text(
+            stringResource(
+                R.string.debug_scheduled_at,
+                scheduled.taskId,
+                scheduled.at.atZone(ZoneId.systemDefault()).format(TIME_FORMAT),
+            ),
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        if (scheduled.result == ScheduleResult.Inexact) {
+            Text(
+                stringResource(R.string.debug_scheduled_inexact_note),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
     }
 }
 

@@ -19,9 +19,10 @@
     <string name="debug_allow">Allow</string>
     <string name="debug_exact_denied_warning">Exact alarms are off, so reminders may arrive late. Tap Allow to turn them on.</string>
     <string name="debug_notifications_denied_warning">Notifications are off, so due tasks can\'t be shown.</string>
-    <string name="debug_schedule_test_task">Schedule test task (1 min)</string>
-    <string name="debug_scheduled_exact">Test task scheduled for 1 minute from now</string>
-    <string name="debug_scheduled_inexact">Test task scheduled, but exact alarms are off: it may be late</string>
+    <string name="debug_schedule_header">Schedule test task in:</string>
+    <string name="debug_preset_minutes">%1$d min</string>
+    <string name="debug_scheduled_at">Test task #%1$d fires at %2$s</string>
+    <string name="debug_scheduled_inexact_note">Exact alarms are off: it may be late</string>
     <string name="debug_tasks_header">Stored tasks</string>
     <string name="debug_task_detail">Due %1$s · next alarm %2$s · snoozes %3$d</string>
 </resources>

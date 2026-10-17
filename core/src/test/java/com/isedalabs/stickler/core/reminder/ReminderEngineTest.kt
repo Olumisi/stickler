@@ -40,7 +40,7 @@ class ReminderEngineTest {
 
         val task = repo.require(1)
         val expected = start.plus(Duration.ofMinutes(1))
-        assertEquals(ScheduleResult.Exact, result)
+        assertEquals(TestTaskScheduled(1, expected, ScheduleResult.Exact), result)
         assertEquals(TaskStatus.Scheduled, task.status)
         assertEquals(expected, task.scheduledAt)
         assertEquals(expected, task.remindAt)
@@ -52,7 +52,19 @@ class ReminderEngineTest {
     fun createTestTask_reportsInexactFallback() = test {
         scheduler.result = ScheduleResult.Inexact
 
-        assertEquals(ScheduleResult.Inexact, engine.createTestTask())
+        assertEquals(ScheduleResult.Inexact, engine.createTestTask().result)
+    }
+
+    @Test
+    fun createTestTask_usesGivenDelay() = test {
+        val result = engine.createTestTask(Duration.ofMinutes(15))
+
+        val task = repo.require(result.taskId)
+        val expected = start.plus(Duration.ofMinutes(15))
+        assertEquals(expected, result.at)
+        assertEquals(expected, task.scheduledAt)
+        assertEquals(expected, task.remindAt)
+        assertEquals(expected, scheduler.pending[result.taskId to AlarmKind.TaskDue])
     }
 
     @Test

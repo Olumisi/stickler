@@ -5,8 +5,13 @@ import com.isedalabs.stickler.core.data.Task
 import com.isedalabs.stickler.core.data.TaskRepository
 import com.isedalabs.stickler.core.data.TaskStatus
 import java.time.Clock
+import java.time.Duration
+import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/** Debug: the task [ReminderEngine.createTestTask] created and when its alarm fires. */
+data class TestTaskScheduled(val taskId: Long, val at: Instant, val result: ScheduleResult)
 
 /**
  * Owns every reminder state change. Handlers reload the task and ignore events that no longer
@@ -21,11 +26,14 @@ class ReminderEngine @Inject constructor(
 ) {
     private val maxSnoozes = ReminderPolicy.DEFAULT_MAX_SNOOZES
 
-    /** Debug: creates a task due [ReminderPolicy.TEST_TASK_DELAY] from now and schedules it. */
-    suspend fun createTestTask(title: String = "Test task"): ScheduleResult {
-        val at = clock.instant().plus(ReminderPolicy.TEST_TASK_DELAY)
+    /** Debug: creates a task due [delay] from now and schedules it. */
+    suspend fun createTestTask(
+        delay: Duration = ReminderPolicy.TEST_TASK_DELAY,
+        title: String = "Test task",
+    ): TestTaskScheduled {
+        val at = clock.instant().plus(delay)
         val id = tasks.insert(Task(title = title, scheduledAt = at, remindAt = at))
-        return scheduler.schedule(id, at, AlarmKind.TaskDue)
+        return TestTaskScheduled(id, at, scheduler.schedule(id, at, AlarmKind.TaskDue))
     }
 
     suspend fun onTaskDue(taskId: Long) {
