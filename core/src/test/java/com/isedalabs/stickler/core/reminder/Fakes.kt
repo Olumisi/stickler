@@ -1,7 +1,10 @@
 package com.isedalabs.stickler.core.reminder
 
+import com.isedalabs.stickler.core.data.Settings
+import com.isedalabs.stickler.core.data.SettingsRepository
 import com.isedalabs.stickler.core.data.Task
 import com.isedalabs.stickler.core.data.TaskRepository
+import com.isedalabs.stickler.core.data.TimeWindow
 import kotlinx.coroutines.flow.Flow
 import java.time.Clock
 import java.time.Duration
@@ -23,13 +26,25 @@ class FakeTaskRepository : TaskRepository {
         tasks[task.id] = task
     }
 
+    override suspend fun delete(task: Task) {
+        tasks.remove(task.id)
+    }
+
     override suspend fun get(id: Long): Task? = tasks[id]
 
     override suspend fun getActive(): List<Task> = tasks.values.filter { it.status.isActive }
 
     override fun observeAll(): Flow<List<Task>> = throw UnsupportedOperationException()
 
+    override fun observeIn(window: TimeWindow): Flow<List<Task>> = throw UnsupportedOperationException()
+
     fun require(id: Long): Task = tasks.getValue(id)
+
+    fun contains(id: Long): Boolean = id in tasks
+}
+
+class FakeSettingsRepository(var settings: Settings = Settings()) : SettingsRepository {
+    override suspend fun get(): Settings = settings
 }
 
 class FakeAlarmScheduler : AlarmScheduler {

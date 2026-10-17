@@ -3,9 +3,12 @@ package com.isedalabs.stickler.core.data
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -53,5 +56,32 @@ class TaskDaoTest {
         val active = dao.getActive().map { it.status }.toSet()
 
         assertEquals(setOf(TaskStatus.Scheduled, TaskStatus.Due, TaskStatus.Snoozed), active)
+    }
+
+    @Test
+    fun observeBetween_includesStartAndExcludesEnd() = runBlocking {
+        val start = Instant.parse("2026-10-16T00:00:00Z")
+        val end = Instant.parse("2026-10-17T00:00:00Z")
+        dao.insert(Task(title = "before", scheduledAt = start.minusMillis(1)))
+        dao.insert(Task(title = "late", scheduledAt = end.minusMillis(1)))
+        dao.insert(Task(title = "start", scheduledAt = start))
+        dao.insert(Task(title = "end", scheduledAt = end))
+
+        val titles = dao.observeBetween(start, end).first().map { it.title }
+
+        assertEquals(listOf("start", "late"), titles)
+    }
+
+    @Test
+    fun deletingTask_deletesItsEvents() = runBlocking {
+        val at = Instant.parse("2026-10-16T09:00:00Z")
+        val id = dao.insert(Task(title = "t", scheduledAt = at))
+        val events = db.reminderEventDao()
+        events.insert(ReminderEvent(taskId = id, type = ReminderEventType.Fired, at = at, device = Device.Phone))
+
+        dao.delete(dao.getById(id)!!)
+
+        assertNull(dao.getById(id))
+        assertTrue(events.getForTask(id).isEmpty())
     }
 }

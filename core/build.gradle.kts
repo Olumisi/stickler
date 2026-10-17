@@ -24,7 +24,8 @@ android {
 }
 
 room {
-    // Exported schemas are checked in so Phase 2+ migrations can be written and tested.
+    // Exported schemas are checked in so migrations can be written and tested; the Room plugin
+    // also adds them to androidTest assets for MigrationTestHelper.
     schemaDirectory("$projectDir/schemas")
 }
 
@@ -35,5 +36,6 @@ dependencies {
     ksp(libs.androidx.room.compiler)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.room.testing)
     androidTestImplementation(libs.androidx.espresso.core) // brings androidx.test:runner
 }
