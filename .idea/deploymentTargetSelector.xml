@@ -4,10 +4,10 @@
     <selectionStates>
       <SelectionState runConfigName="app">
         <option name="selectionMode" value="DROPDOWN" />
-        <DropdownSelection timestamp="2026-09-27T10:38:47.513971900Z">
+        <DropdownSelection timestamp="2026-10-17T03:21:04.603380400Z">
           <Target type="DEFAULT_BOOT">
             <handle>
-              <DeviceId pluginId="LocalEmulator" identifier="path=C:\Users\olumi\.android\avd\Wear_OS_Small_Round.avd" />
+              <DeviceId pluginId="PhysicalDevice" identifier="serial=RFGL21X50GT" />
             </handle>
           </Target>
         </DropdownSelection>
@@ -15,10 +15,10 @@
       </SelectionState>
       <SelectionState runConfigName="wear">
         <option name="selectionMode" value="DROPDOWN" />
-        <DropdownSelection timestamp="2026-09-27T10:38:59.151990600Z">
+        <DropdownSelection timestamp="2026-10-03T15:23:18.077219500Z">
           <Target type="DEFAULT_BOOT">
             <handle>
-              <DeviceId pluginId="LocalEmulator" identifier="path=C:\Users\olumi\.android\avd\Wear_OS_Small_Round.avd" />
+              <DeviceId pluginId="LocalEmulator" identifier="path=C:\Users\olumi\.android\avd\Pixel_10a.avd" />
             </handle>
           </Target>
         </DropdownSelection>
